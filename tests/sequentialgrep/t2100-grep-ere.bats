@@ -8,6 +8,7 @@ load fixture
 The quick brown fox
 the lazy dog.
 My cat is lazy and likes to sleep all day.
+He sleeps a lot and is very nimble.
 My hobby is sleeping and watching my pets.
 EOF
 }

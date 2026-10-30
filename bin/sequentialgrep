@@ -54,7 +54,7 @@ regexpConverter()
 {
     basicToExtendedRegexp "$@"
 }
-printer='print'
+result='return $0'
 typeset -a awkProgram=()
 while [ $# -ne 0 ]
 do
@@ -62,9 +62,9 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--extended-regexp)
 			shift; regexpConverter() { printf %s "$@"; };;
-	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { hasMatch = 1; printer(); next }"); shift;;
+	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { hasMatch = 1; recordMatch(1 + ${#awkProgram[@]}); next }"); shift;;
 	--files-with-matches|-l)
-			shift; printer='if (lastFilename != FILENAME) { print FILENAME; lastFilename = FILENAME; }';;
+			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
 	--)		shift; break;;
 	-)		break;; # For supporting special - FILE without prior --
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -77,14 +77,41 @@ if [ ${#awkProgram[@]} -eq 0 ]; then
 fi
 
 IFS=$'\n'
-${DEBUG:+debugcommand
+${DEBUG:+env
+VERBOSE_IFS="${VERBOSE_IFS-newline}"
+ECHOTRACE_IFS="${ECHOTRACE_IFS-newline}"
+debugcommand
 --module
 awk
 --} awk \
-"
-function printer() {
-    $printer
+    -v sequenceLength=${#awkProgram[@]} \
+'
+function recordMatch( patternCount,      matchResult) {
+    if (patternCount == 1) {
+	currentCount = 1
+	currentHasResult = 0
+	currentResult = ""
+    } else if (++currentCount != patternCount) {
+	return
+    }
+
+    matchResult = result()
+    if (matchResult != "\n") {
+	currentHasResult = 1
+	currentResult = currentResult (currentResult == "" ? "" : "\n") matchResult
+    }
+    if (patternCount == sequenceLength) {
+	hasMatch = 1
+	if (currentHasResult) print currentResult
+	currentCount = 0
+	currentHasResult = 0
+	currentResult = ""
+    }
 }
-""${awkProgram[*]}"'
+'"
+function result() {
+    $result
+}
+${awkProgram[*]}"'
 END { exit(hasMatch ? 0 : 1) }
 ' "$@"

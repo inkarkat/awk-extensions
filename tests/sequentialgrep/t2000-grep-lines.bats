@@ -7,7 +7,7 @@ load fixture
     assert_output - <<'EOF'
 The quick brown fox
 She gained a lot of weight quickly
-He is quick and nimble.
+Look how quick he runs to his food!
 EOF
 }
 
@@ -18,7 +18,7 @@ the lazy dog.
 My cat is lazy and likes to sleep all day.
 and now she is very fat.
 I have a hamster named Hampton.
-He is quick and nimble.
+He sleeps a lot and is very nimble.
 Owning a rhinoceros is crazy.
 My hobby is sleeping and watching my pets.
 EOF
