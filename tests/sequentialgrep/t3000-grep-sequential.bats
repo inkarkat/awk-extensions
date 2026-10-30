@@ -27,3 +27,17 @@ I have a hamster named Hampton.
 He sleeps a lot and is very nimble.
 EOF
 }
+
+@test "grep sequential patterns matching across file borders" {
+    run -0 sequentialgrep -e 'ick' -e 'azy' "${BATS_TEST_DIRNAME}"/input{,2,3}.txt
+    assert_output - <<EOF
+The quick brown fox
+the lazy dog.
+Look how quick he runs to his food!
+Owning a rhinoceros is crazy.
+Hopefully they don't get sick!
+This hazy file intentionally
+For more quick tips, visit our website.
+Don't be lazy!
+EOF
+}

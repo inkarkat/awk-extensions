@@ -14,3 +14,12 @@ ${BATS_TEST_DIRNAME}/input.txt
 ${BATS_TEST_DIRNAME}/input3.txt
 EOF
 }
+
+@test "grep filespecs of sequential patterns matching across file borders" {
+    run -0 sequentialgrep -e 'ick' -e 'azy' --files-with-matches "${BATS_TEST_DIRNAME}"/input{,2,3}.txt
+    assert_output - <<EOF
+${BATS_TEST_DIRNAME}/input.txt
+${BATS_TEST_DIRNAME}/input2.txt
+${BATS_TEST_DIRNAME}/input3.txt
+EOF
+}
