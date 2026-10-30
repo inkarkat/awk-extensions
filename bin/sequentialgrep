@@ -1,0 +1,81 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [--] [FILE ...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Print lines that match patterns one after another, in order.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --extended-regexp	Interpret PATTERNS as extended regular expressions
+			instead of basic ones.
+    -e PATTERNS		Use PATTERNS as the patterns to match. If this option is
+			used multiple times, the next pattern needs to match in
+			a following (but not necessarily consecutive) line.
+    -E PATTERNS		Use PATTERNS as the patterns to not match. If this
+			option is used multiple times, the next pattern needs to
+			[not] match in a following (but not necessarily
+			consecutive) line.
+    --files-with-matches|-l
+			Suppress normal output; instead print the name of each
+			input file from which output would normally have been
+			printed.
+SEE ALSO:
+- (Commands offering complementary functionality, or commands using this command.)
+
+RELATED COMMANDS:
+- (Alternatives from other authors, other approaches, references not used here.)
+
+cla-exitstatus
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" '--foo bar /tmp/foobar' # TODO
+}
+
+regexpConverter()
+{
+    basicToExtendedRegexp "$@"
+}
+typeset -a awkProgram=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--extended-regexp)
+			shift; regexpConverter() { printf %s "$@"; };;
+	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { print; next }"); shift;;
+	--)		shift; break;;
+	-)		break;; # For supporting special - FILE without prior --
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#awkProgram[@]} -eq 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+IFS=$'\n'
+${DEBUG:+debugcommand
+--module
+awk
+--} awk \
+    "${awkProgram[*]}" "$@"
