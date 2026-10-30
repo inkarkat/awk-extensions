@@ -61,7 +61,7 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--extended-regexp)
 			shift; regexpConverter() { printf %s "$@"; };;
-	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { print; next }"); shift;;
+	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { hasMatch = 1; print; next }"); shift;;
 	--)		shift; break;;
 	-)		break;; # For supporting special - FILE without prior --
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -78,4 +78,6 @@ ${DEBUG:+debugcommand
 --module
 awk
 --} awk \
-    "${awkProgram[*]}" "$@"
+    "${awkProgram[*]}"'
+END { exit(hasMatch ? 0 : 1) }
+' "$@"

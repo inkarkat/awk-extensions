@@ -23,3 +23,8 @@ Owning a rhinoceros is crazy.
 My hobby is sleeping and watching my pets.
 EOF
 }
+
+@test "grep single lines with non-matching literal word returns 1" {
+    run -1 sequentialgrep -e 'doesNotMatch' "${BATS_TEST_DIRNAME}/input.txt"
+    assert_output ''
+}
