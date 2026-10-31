@@ -56,7 +56,26 @@ regexpConverter()
 {
     basicToExtendedRegexp "$@"
 }
-typeset -a awkProgram=()
+typeset -a awkProgressing=() awkSkip=() awkRestart=()
+addPattern()
+{
+    local isNegated="${1?}"; shift
+    local pattern="${1:?}"; shift
+    local currentCount="${#awkProgressing[@]}"
+
+    # A match with the following pattern progresses the sequence.
+    awkProgressing+=("currentCount == $currentCount && ${isNegated:+! }/$(regexpConverter "$pattern")/ { recordMatch(1 + $currentCount); next }"); shift
+
+    if [ $currentCount -gt 0 ]; then
+	# If the current sequence's pattern matches again, just skip ahead. This is just
+	# to prevent a match of the first pattern from resetting the sequence.
+	awkSkip+=("currentCount == 1 + $currentCount && ${isNegated:+! }/$(regexpConverter "$pattern")/ { next }"); shift
+    else
+	# If the line didn't progress the sequence, but it matches the first pattern,
+	# reset the sequence and start over.
+	awkRestart+=("${isNegated:+! }/$(regexpConverter "$pattern")/ { recordMatch(1 + $currentCount); next }"); shift
+    fi
+}
 result='return $0'
 isPerFile=
 while [ $# -ne 0 ]
@@ -65,7 +84,8 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--extended-regexp)
 			shift; regexpConverter() { printf %s "$@"; };;
-	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { hasMatch = 1; recordMatch(1 + ${#awkProgram[@]}); next }"); shift;;
+	-e)		shift; addPattern '' "${1:?}"; shift;;
+	-E)		shift; addPattern t "${1:?}"; shift;;
 	--files-with-matches|-l)
 			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
 	--per-file)	shift; isPerFile=t;;
@@ -75,7 +95,7 @@ do
 	*)		break;;
     esac
 done
-if [ ${#awkProgram[@]} -eq 0 ]; then
+if [ ${#awkProgressing[@]} -eq 0 ]; then
     printUsage "$0" >&2
     exit 2
 fi
@@ -88,7 +108,7 @@ debugcommand
 --module
 awk
 --} awk \
-    -v sequenceLength=${#awkProgram[@]} \
+    -v sequenceLength=${#awkProgressing[@]} \
 '
 function resetCurrent() {
     currentCount = 0
@@ -121,6 +141,8 @@ function result() {
 ${isPerFile:+BEGINFILE {
     resetCurrent()
 \}}
-${awkProgram[*]}"'
+${awkProgressing[*]}
+${awkSkip[*]}
+${awkRestart[*]}"'
 END { exit(hasMatch ? 0 : 1) }
 ' "$@"

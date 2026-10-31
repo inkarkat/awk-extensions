@@ -18,6 +18,15 @@ the lazy dog.
 EOF
 }
 
+@test "grep three consecutive lines with literal words" {
+    run -0 sequentialgrep -e 'lazy' -e 'quick' -e 'fat' "${BATS_TEST_DIRNAME}/input.txt"
+    assert_output - <<'EOF'
+My cat is lazy and likes to sleep all day.
+She gained a lot of weight quickly
+and now she is very fat.
+EOF
+}
+
 @test "grep two sequential lines with patterns matching two times" {
     run -0 sequentialgrep -e 'quick\|hamster' -e 'lazy\|nimble' "${BATS_TEST_DIRNAME}/input.txt"
     assert_output - <<'EOF'
