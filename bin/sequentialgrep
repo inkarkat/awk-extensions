@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-l|--files-with-matches] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-l|--files-with-matches] [--per-file] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -37,6 +37,8 @@ HELPDESCRIPTION
 			Suppress normal output; instead print the name of each
 			input file from which output would normally have been
 			printed.
+    --per-file		Reset the pattern sequence for each input file. By
+			default, a pattern sequence can span multiple files.
 SEE ALSO:
 - (Commands offering complementary functionality, or commands using this command.)
 
@@ -54,8 +56,9 @@ regexpConverter()
 {
     basicToExtendedRegexp "$@"
 }
-result='return $0'
 typeset -a awkProgram=()
+result='return $0'
+isPerFile=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -65,6 +68,7 @@ do
 	-e)		shift; awkProgram+=("/$(regexpConverter "${1:?}")/ { hasMatch = 1; recordMatch(1 + ${#awkProgram[@]}); next }"); shift;;
 	--files-with-matches|-l)
 			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
+	--per-file)	shift; isPerFile=t;;
 	--)		shift; break;;
 	-)		break;; # For supporting special - FILE without prior --
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -114,6 +118,9 @@ function recordMatch( patternCount,      matchResult) {
 function result() {
     $result
 }
+${isPerFile:+BEGINFILE {
+    resetCurrent()
+\}}
 ${awkProgram[*]}"'
 END { exit(hasMatch ? 0 : 1) }
 ' "$@"
