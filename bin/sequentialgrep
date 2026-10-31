@@ -86,11 +86,15 @@ awk
 --} awk \
     -v sequenceLength=${#awkProgram[@]} \
 '
+function resetCurrent() {
+    currentCount = 0
+    currentHasResult = 0
+    currentResult = ""
+}
 function recordMatch( patternCount,      matchResult) {
     if (patternCount == 1) {
-	currentCount = 1
-	currentHasResult = 0
-	currentResult = ""
+	resetCurrent()
+	currentCount++
     } else if (++currentCount != patternCount) {
 	return
     }
@@ -103,9 +107,7 @@ function recordMatch( patternCount,      matchResult) {
     if (patternCount == sequenceLength) {
 	hasMatch = 1
 	if (currentHasResult) print currentResult
-	currentCount = 0
-	currentHasResult = 0
-	currentResult = ""
+	resetCurrent()
     }
 }
 '"
