@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-l|--files-with-matches] [--per-file] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-l|--files-with-matches] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -39,6 +39,7 @@ HELPDESCRIPTION
 			printed.
     --per-file		Reset the pattern sequence for each input file. By
 			default, a pattern sequence can span multiple files.
+    --unbuffered|-u	Immediately output each match.
 SEE ALSO:
 - (Commands offering complementary functionality, or commands using this command.)
 
@@ -78,6 +79,7 @@ addPattern()
 }
 result='return $0'
 isPerFile=
+isBuffered=t; [ -t 1 ] && isBuffered=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -89,6 +91,8 @@ do
 	--files-with-matches|-l)
 			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
 	--per-file)	shift; isPerFile=t;;
+	--unbuffered|-u)
+			shift; isBuffered=;;
 	--)		shift; break;;
 	-)		break;; # For supporting special - FILE without prior --
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -109,6 +113,7 @@ debugcommand
 awk
 --} awk \
     -v sequenceLength=${#awkProgressing[@]} \
+    -v "isBuffered=$isBuffered" \
 '
 function resetCurrent() {
     currentCount = 0
@@ -130,7 +135,10 @@ function recordMatch( patternCount,      matchResult) {
     }
     if (patternCount == sequenceLength) {
 	hasMatch = 1
-	if (currentHasResult) print currentResult
+	if (currentHasResult) {
+	    print currentResult
+	    if (! isBuffered) fflush()
+	}
 	resetCurrent()
     }
 }
