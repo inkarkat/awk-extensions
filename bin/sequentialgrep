@@ -86,7 +86,7 @@ addPattern()
 }
 initResult=
 onReset=''
-onResult='printCurrentResult()'
+onResult='outputCurrentResult()'
 result='return $0'
 finishResult=
 finally=
@@ -137,11 +137,11 @@ if [ "$isFilesWithoutMatches" ]; then
 	# Files in which we weren't searching are collected in filesWithoutMatchResult.
 	# These are output when we start searching again, or at the very end.
 	initResult='if (isFinishedSearching) { isSearching = 0; isFinishedSearching = 0; }'
-	onReset='if (filesWithoutMatchResult != "") print filesWithoutMatchResult; filesWithoutMatchResult = ""; isSearching = 1'
+	onReset='outputNonEmpty(filesWithoutMatchResult); filesWithoutMatchResult = ""; isSearching = 1'
 	onResult='isFinishedSearching = 1'
 	result='return 1'
-	finishResult='if (! isSearching) filesWithoutMatchResult = filesWithoutMatchResult (filesWithoutMatchResult == "" ? "" : "\n") FILENAME'
-	finally='if (filesWithoutMatchResult != "") { print filesWithoutMatchResult; }'
+	finishResult='if (! isSearching) { filesWithoutMatchResult = filesWithoutMatchResult (filesWithoutMatchResult == "" ? "" : "\n") FILENAME; }'
+	finally='outputNonEmpty(filesWithoutMatchResult)'
     fi
 fi
 
@@ -164,11 +164,17 @@ function resetCurrent() {
     currentResult = ""
     '"$onReset"'
 }
-function printCurrentResult() {
-    print currentResult
+function output(expr) {
+    print expr
     if (! isBuffered) fflush()
 }
-function recordMatch( patternCount,      matchResult) {
+function outputNonEmpty(expr) {
+    if (expr != "") output(expr)
+}
+function outputCurrentResult() {
+    output(currentResult)
+}
+function recordMatch(patternCount,      matchResult) {
     if (patternCount == 1) {
 	resetCurrent()
 	currentCount++
