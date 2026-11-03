@@ -21,3 +21,8 @@ ${BATS_TEST_DIRNAME}/input.txt
 ${BATS_TEST_DIRNAME}/input3.txt
 EOF
 }
+
+@test "grep non-matching filespecs of sequential patterns stopping at file borders" {
+    run -0 sequentialgrep --per-file -e 'ick' -e 'azy' --files-without-match "${BATS_TEST_DIRNAME}"/input{,2,3}.txt
+    assert_output "${BATS_TEST_DIRNAME}/input2.txt"
+}

@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-i|--[no-]ignore-case] [-l|--files-with-matches] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-i|--[no-]ignore-case] [-l|--files-with-matches|-L|--files-without-match] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -39,6 +39,10 @@ HELPDESCRIPTION
     --files-with-matches|-l
 			Suppress normal output; instead print the name of each
 			input file from which output would normally have been
+			printed.
+    --files-without-match|-L
+			Suppress normal output; instead print the name of each
+			input file from which no output would normally have been
 			printed.
     --per-file		Reset the pattern sequence for each input file. By
 			default, a pattern sequence can span multiple files.
@@ -80,7 +84,13 @@ addPattern()
 	awkRestart+=("${isNegated:+! }/$(regexpConverter "$pattern")/ { recordMatch(1 + $currentCount); next }"); shift
     fi
 }
+initResult=
+onReset=''
+onResult='printCurrentResult()'
 result='return $0'
+finishResult=
+finally=
+isFilesWithoutMatches=
 isIgnoreCase=
 isPerFile=
 isBuffered=t; [ -t 1 ] && isBuffered=
@@ -98,6 +108,8 @@ do
 			shift; isIgnoreCase=;;
 	--files-with-matches|-l)
 			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
+	--files-without-match|-L)
+			shift; isFilesWithoutMatches=t;;
 	--per-file)	shift; isPerFile=t;;
 	--unbuffered|-u)
 			shift; isBuffered=;;
@@ -110,6 +122,27 @@ done
 if [ ${#awkProgressing[@]} -eq 0 ]; then
     printUsage "$0" >&2
     exit 2
+fi
+if [ "$isFilesWithoutMatches" ]; then
+    if [ "$isPerFile" ]; then
+	# Just set a hasResult flag for each file, and print the filename if it has not
+	# been set for that file.
+	initResult='hasResult = 0'
+	onResult='hasResult = 1'
+	result='return 1'
+	finishResult='if (!hasResult) print FILENAME'
+    else
+	# isSearching starts with the first pattern's match, and ends in the file
+	# following the one with a complete result.
+	# Files in which we weren't searching are collected in filesWithoutMatchResult.
+	# These are output when we start searching again, or at the very end.
+	initResult='if (isFinishedSearching) { isSearching = 0; isFinishedSearching = 0; }'
+	onReset='if (filesWithoutMatchResult != "") print filesWithoutMatchResult; filesWithoutMatchResult = ""; isSearching = 1'
+	onResult='isFinishedSearching = 1'
+	result='return 1'
+	finishResult='if (! isSearching) filesWithoutMatchResult = filesWithoutMatchResult (filesWithoutMatchResult == "" ? "" : "\n") FILENAME'
+	finally='if (filesWithoutMatchResult != "") { print filesWithoutMatchResult; }'
+    fi
 fi
 
 : ${isIgnoreCase:=0}
@@ -129,6 +162,11 @@ function resetCurrent() {
     currentCount = 0
     currentHasResult = 0
     currentResult = ""
+    '"$onReset"'
+}
+function printCurrentResult() {
+    print currentResult
+    if (! isBuffered) fflush()
 }
 function recordMatch( patternCount,      matchResult) {
     if (patternCount == 1) {
@@ -146,8 +184,7 @@ function recordMatch( patternCount,      matchResult) {
     if (patternCount == sequenceLength) {
 	hasMatch = 1
 	if (currentHasResult) {
-	    print currentResult
-	    if (! isBuffered) fflush()
+	    '"$onResult"'
 	}
 	resetCurrent()
     }
@@ -156,9 +193,16 @@ function recordMatch( patternCount,      matchResult) {
 function result() {
     $result
 }
-${isPerFile:+BEGINFILE {
-    resetCurrent()
-\}}
+BEGINFILE {
+    $initResult
+    ${isPerFile:+resetCurrent()}
+}
+ENDFILE {
+    $finishResult
+}
+END {
+    $finally
+}
 ${awkProgressing[*]}
 ${awkSkip[*]}
 ${awkRestart[*]}"'
