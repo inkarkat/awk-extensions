@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-l|--files-with-matches] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-i|--[no-]ignore-case] [-l|--files-with-matches] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -26,6 +26,9 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --extended-regexp	Interpret PATTERNS as extended regular expressions
 			instead of basic ones.
+    --ignore-case|-i	Ignore case distinctions in patterns and input data, so
+			that characters that differ only in case match each
+			other.
     -e PATTERNS		Use PATTERNS as the patterns to match. If this option is
 			used multiple times, the next pattern needs to match in
 			a following (but not necessarily consecutive) line.
@@ -78,6 +81,7 @@ addPattern()
     fi
 }
 result='return $0'
+isIgnoreCase=
 isPerFile=
 isBuffered=t; [ -t 1 ] && isBuffered=
 while [ $# -ne 0 ]
@@ -88,6 +92,10 @@ do
 			shift; regexpConverter() { printf %s "$@"; };;
 	-e)		shift; addPattern '' "${1:?}"; shift;;
 	-E)		shift; addPattern t "${1:?}"; shift;;
+	--ignore-case|-i)
+			shift; isIgnoreCase=t;;
+	--no-ignore-case)
+			shift; isIgnoreCase=;;
 	--files-with-matches|-l)
 			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
 	--per-file)	shift; isPerFile=t;;
@@ -104,6 +112,7 @@ if [ ${#awkProgressing[@]} -eq 0 ]; then
     exit 2
 fi
 
+: ${isIgnoreCase:=0}
 IFS=$'\n'
 ${DEBUG:+env
 VERBOSE_IFS="${VERBOSE_IFS-newline}"
@@ -113,6 +122,7 @@ debugcommand
 awk
 --} awk \
     -v sequenceLength=${#awkProgressing[@]} \
+    -v "IGNORECASE=${isIgnoreCase//t/1}" \
     -v "isBuffered=$isBuffered" \
 '
 function resetCurrent() {
