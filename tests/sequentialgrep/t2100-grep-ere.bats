@@ -3,7 +3,7 @@
 load fixture
 
 @test "grep single lines with extended regular expression pattern" {
-    DEBUG=sequentialgrep:awk run -0 sequentialgrep --extended-regexp -e '(fo?x|do+g)|(e{2,})' "${BATS_TEST_DIRNAME}/input.txt"
+    run -0 sequentialgrep --extended-regexp -e '(fo?x|do+g)|(e{2,})' "${BATS_TEST_DIRNAME}/input.txt"
     assert_output - <<'EOF'
 The quick brown fox
 the lazy dog.
