@@ -1,0 +1,15 @@
+The quick brown fox
+jumps over
+the lazy dog.
+---
+My cat is lazy and likes to sleep all day.
+She gained a lot of weight quickly
+and now she is very fat.
++++
+I have a hamster named Hampton.
+He sleeps a lot and is very nimble.
+Look how quick he runs to his food!
+###
+Owning a rhinoceros is crazy.
+My hobby is sleeping and watching my pets.
+Hopefully they don't get sick!

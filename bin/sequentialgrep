@@ -1,0 +1,212 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-e PATTERNS|-E PATTERNS [-e ...] [--extended-regexp] [-i|--[no-]ignore-case] [-l|--files-with-matches|-L|--files-without-match] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Print lines that match patterns one after another, in order.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    -e PATTERNS		Use PATTERNS as the patterns to match. If this option is
+			used multiple times, the next pattern needs to match in
+			a following (but not necessarily consecutive) line.
+    -E PATTERNS		Use PATTERNS as the patterns to not match. If this
+			option is used multiple times, the next pattern needs to
+			[not] match in a following (but not necessarily
+			consecutive) line.
+    --extended-regexp	Interpret PATTERNS as extended regular expressions
+			instead of basic ones.
+    --ignore-case|-i	Ignore case distinctions in patterns and input data, so
+			that characters that differ only in case match each
+			other.
+    --files-with-matches|-l
+			Suppress normal output; instead print the name of each
+			input file from which output would normally have been
+			printed.
+    --files-without-match|-L
+			Suppress normal output; instead print the name of each
+			input file from which no output would normally have been
+			printed.
+    --per-file		Reset the pattern sequence for each input file. By
+			default, a pattern sequence can span multiple files.
+    --unbuffered|-u	Immediately output each match.
+PATTERNS are AWK-style unanchored regular expressions.
+
+EXIT STATUS:
+    0	Line(s) were selected.
+    1	No line(s) were selected.
+    2	Bad invocation, wrong or missing command-line arguments, or fatal error.
+HELPTEXT
+}
+
+regexpConverter()
+{
+    basicToExtendedRegexp "$@"
+}
+typeset -a awkProgressing=() awkSkip=() awkRestart=()
+addPattern()
+{
+    local isNegated="${1?}"; shift
+    local pattern="${1:?}"; shift
+    local currentCount="${#awkProgressing[@]}"
+
+    # A match with the following pattern progresses the sequence.
+    awkProgressing+=("currentCount == $currentCount && ${isNegated:+! }/$(regexpConverter "$pattern")/ { recordMatch(1 + $currentCount); next }"); shift
+
+    if [ $currentCount -gt 0 ]; then
+	# If the current sequence's pattern matches again, just skip ahead. This is just
+	# to prevent a match of the first pattern from resetting the sequence.
+	awkSkip+=("currentCount == 1 + $currentCount && ${isNegated:+! }/$(regexpConverter "$pattern")/ { next }"); shift
+    else
+	# If the line didn't progress the sequence, but it matches the first pattern,
+	# reset the sequence and start over.
+	awkRestart+=("${isNegated:+! }/$(regexpConverter "$pattern")/ { recordMatch(1 + $currentCount); next }"); shift
+    fi
+}
+initResult=
+onReset=''
+onResult='outputCurrentResult()'
+result='return $0'
+finishResult=
+finally=
+isFilesWithoutMatches=
+isIgnoreCase=
+isPerFile=
+isBuffered=t; [ -t 1 ] && isBuffered=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--extended-regexp)
+			shift; regexpConverter() { printf %s "$@"; };;
+	-e)		shift; addPattern '' "${1:?}"; shift;;
+	-E)		shift; addPattern t "${1:?}"; shift;;
+	--ignore-case|-i)
+			shift; isIgnoreCase=t;;
+	--no-ignore-case)
+			shift; isIgnoreCase=;;
+	--files-with-matches|-l)
+			shift; result='if (lastFilename == FILENAME) return "\n"; lastFilename = FILENAME; return FILENAME';;
+	--files-without-match|-L)
+			shift; isFilesWithoutMatches=t;;
+	--per-file)	shift; isPerFile=t;;
+	--unbuffered|-u)
+			shift; isBuffered=;;
+	--)		shift; break;;
+	-)		break;; # For supporting special - FILE without prior --
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#awkProgressing[@]} -eq 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+if [ "$isFilesWithoutMatches" ]; then
+    if [ "$isPerFile" ]; then
+	# Just set a hasResult flag for each file, and print the filename if it has not
+	# been set for that file.
+	initResult='hasResult = 0'
+	onResult='hasResult = 1'
+	result='return 1'
+	finishResult='if (!hasResult) print FILENAME'
+    else
+	# isSearching starts with the first pattern's match, and ends in the file
+	# following the one with a complete result.
+	# Files in which we weren't searching are collected in filesWithoutMatchResult.
+	# These are output when we start searching again, or at the very end.
+	initResult='if (isFinishedSearching) { isSearching = 0; isFinishedSearching = 0; }'
+	onReset='outputNonEmpty(filesWithoutMatchResult); filesWithoutMatchResult = ""; isSearching = 1'
+	onResult='isFinishedSearching = 1'
+	result='return 1'
+	finishResult='if (! isSearching) { filesWithoutMatchResult = filesWithoutMatchResult (filesWithoutMatchResult == "" ? "" : "\n") FILENAME; }'
+	finally='outputNonEmpty(filesWithoutMatchResult)'
+    fi
+fi
+
+: ${isIgnoreCase:=0}
+IFS=$'\n'
+${DEBUG:+env
+VERBOSE_IFS="${VERBOSE_IFS-newline}"
+ECHOTRACE_IFS="${ECHOTRACE_IFS-newline}"
+debugcommand
+--module
+awk
+--} awk \
+    -v sequenceLength=${#awkProgressing[@]} \
+    -v "IGNORECASE=${isIgnoreCase//t/1}" \
+    -v "isBuffered=$isBuffered" \
+'
+function resetCurrent() {
+    currentCount = 0
+    currentHasResult = 0
+    currentResult = ""
+    '"$onReset"'
+}
+function output(expr) {
+    print expr
+    if (! isBuffered) fflush()
+}
+function outputNonEmpty(expr) {
+    if (expr != "") output(expr)
+}
+function outputCurrentResult() {
+    output(currentResult)
+}
+function recordMatch(patternCount,      matchResult) {
+    if (patternCount == 1) {
+	resetCurrent()
+	currentCount++
+    } else if (++currentCount != patternCount) {
+	return
+    }
+
+    matchResult = result()
+    if (matchResult != "\n") {
+	currentHasResult = 1
+	currentResult = currentResult (currentResult == "" ? "" : "\n") matchResult
+    }
+    if (patternCount == sequenceLength) {
+	hasMatch = 1
+	if (currentHasResult) {
+	    '"$onResult"'
+	}
+	resetCurrent()
+    }
+}
+'"
+function result() {
+    $result
+}
+BEGINFILE {
+    $initResult
+    ${isPerFile:+resetCurrent()}
+}
+ENDFILE {
+    $finishResult
+}
+END {
+    $finally
+}
+${awkProgressing[*]}
+${awkSkip[*]}
+${awkRestart[*]}"'
+END { exit(hasMatch ? 0 : 1) }
+' "$@"
