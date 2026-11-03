@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[--extended-regexp] -e PATTERNS|-E PATTERNS [-e ...] [-i|--[no-]ignore-case] [-l|--files-with-matches|-L|--files-without-match] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-e PATTERNS|-E PATTERNS [-e ...] [--extended-regexp] [-i|--[no-]ignore-case] [-l|--files-with-matches|-L|--files-without-match] [--per-file] [-u|--unbuffered] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -24,11 +24,6 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    --extended-regexp	Interpret PATTERNS as extended regular expressions
-			instead of basic ones.
-    --ignore-case|-i	Ignore case distinctions in patterns and input data, so
-			that characters that differ only in case match each
-			other.
     -e PATTERNS		Use PATTERNS as the patterns to match. If this option is
 			used multiple times, the next pattern needs to match in
 			a following (but not necessarily consecutive) line.
@@ -36,6 +31,11 @@ HELPDESCRIPTION
 			option is used multiple times, the next pattern needs to
 			[not] match in a following (but not necessarily
 			consecutive) line.
+    --extended-regexp	Interpret PATTERNS as extended regular expressions
+			instead of basic ones.
+    --ignore-case|-i	Ignore case distinctions in patterns and input data, so
+			that characters that differ only in case match each
+			other.
     --files-with-matches|-l
 			Suppress normal output; instead print the name of each
 			input file from which output would normally have been
@@ -47,17 +47,13 @@ HELPDESCRIPTION
     --per-file		Reset the pattern sequence for each input file. By
 			default, a pattern sequence can span multiple files.
     --unbuffered|-u	Immediately output each match.
-SEE ALSO:
-- (Commands offering complementary functionality, or commands using this command.)
+PATTERNS are AWK-style unanchored regular expressions.
 
-RELATED COMMANDS:
-- (Alternatives from other authors, other approaches, references not used here.)
-
-cla-exitstatus
-
-Example:
+EXIT STATUS:
+    0	Line(s) were selected.
+    1	No line(s) were selected.
+    2	Bad invocation, wrong or missing command-line arguments, or fatal error.
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" '--foo bar /tmp/foobar' # TODO
 }
 
 regexpConverter()
